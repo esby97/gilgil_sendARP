@@ -6,34 +6,41 @@
 #include <string.h>
 
 typedef struct{
-    const u_int8_t Dmac[6];
-    const u_int8_t Smac[6];
-    const u_int16_t type;
-}_Ethernet;
+    const uint8_t Dmac[6];
+    const uint8_t Smac[6];
+    const uint16_t type;
+}Ethernet;
 
 typedef struct{
-    const u_int16_t type;
-    const u_int16_t protocol;
-}
+    const uint16_t hwtype;
+    const uint16_t protocol;
+	const uint8_t hwsize;
+	const uint8_t ptsize;
+	const uint16_t opcode;
+	const uint8_t sender_mac[6];
+	const uint8_t sender_ip[4];
+	const uint8_t target_mac[6];
+	const uint8_t target_ip[4];
+}ARP;
 
 typedef struct{
-    const u_int8_t IHL;
-    const u_int8_t service;
-    const u_int16_t total_length;
-    const u_int8_t dummy2[5];
-    const u_int8_t protocol;
-    const u_int8_t dummy3[2];
-    const u_int8_t source_address[4];
-    const u_int8_t destination_address[4];
-}_IP;
+    const uint8_t IHL;
+    const uint8_t service;
+    const uint16_t total_length;
+    const uint8_t dummy2[5];
+    const uint8_t protocol;
+    const uint8_t dummy3[2];
+    const uint8_t source_address[4];
+    const uint8_t destination_address[4];
+}IP;
 
 typedef struct{
-    const u_int16_t source_port;
-    const u_int16_t destination_port;
-    const u_int8_t dummy[8];
-    const u_int8_t Hlen;
-    const u_int8_t dummy2[7];
-}_TCP;
+    const uint16_t source_port;
+    const uint16_t destination_port;
+    const uint8_t dummy[8];
+    const uint8_t Hlen;
+    const uint8_t dummy2[7];
+}TCP;
 
 
 #endif // SENDARP_HEADER_H

